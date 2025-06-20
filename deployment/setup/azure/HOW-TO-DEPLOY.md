@@ -300,6 +300,27 @@ openssl rand -base64 32
 # Copy this value to R2R_SECRET_KEY in azure-secrets.yaml
 ```
 
+### Step 4.7: Configure External PostgreSQL Database
+```bash
+# Set PostgreSQL configuration via environment variable for security
+export TF_VAR_postgres_config='{
+  "host": "your-postgres-host-or-ip",
+  "port": 5432,
+  "username": "r2r_user",
+  "password": "your-secure-password",
+  "database": "r2r"
+}'
+
+# Alternatively, edit terraform.tfvars directly (less secure)
+# Update the postgres_config section with your database details
+```
+
+**Important**: Make sure your PostgreSQL database:
+- Has the `pgvector` extension installed
+- Has a database named `r2r` (or update the config)
+- Has a user `r2r_user` with full access to the `r2r` database
+- Is accessible from your Azure AKS cluster (network connectivity)
+
 ---
 
 ## 🏗️ PHASE 5: Deploy Infrastructure
@@ -421,11 +442,20 @@ cd ../kubernetes/azure-overlay
 # Apply the Azure-specific overlay (this extends the base R2R configuration)
 kubectl apply -k .
 
+# Wait for the database initialization job to complete
+kubectl wait --for=condition=complete --timeout=300s job/create-r2r-database -n ai-system
+
 # Wait for deployments to be ready (this can take 10-15 minutes)
 kubectl wait --for=condition=available --timeout=900s deployment --all -n ai-system
 ```
 
 ✅ **Expected Output**: All deployments show as "available".
+
+**Note**: The deployment includes:
+- **External PostgreSQL** database (your existing database server)
+- **Hatchet PostgreSQL** inside Kubernetes for workflow data  
+- **Environment variables** automatically injected for database connectivity
+- **Secrets** managed securely via Kubernetes
 
 ### Step 6.4: Check Application Status
 ```bash

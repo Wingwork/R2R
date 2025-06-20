@@ -233,6 +233,23 @@ output "network_configuration" {
   }
 }
 
+# PostgreSQL Configuration Outputs
+output "postgres_configuration" {
+  description = "PostgreSQL configuration for R2R"
+  value = {
+    host     = var.postgres_config.host
+    port     = var.postgres_config.port
+    username = var.postgres_config.username
+    database = var.postgres_config.database
+  }
+}
+
+output "postgres_connection_string" {
+  description = "PostgreSQL connection string for R2R"
+  value       = "postgresql://${var.postgres_config.username}:${var.postgres_config.password}@${var.postgres_config.host}:${var.postgres_config.port}/${var.postgres_config.database}"
+  sensitive   = true
+}
+
 # Node Pool Configuration
 output "node_pool_configuration" {
   description = "Node pool configuration summary"

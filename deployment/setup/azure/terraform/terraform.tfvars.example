@@ -53,8 +53,24 @@ enable_ssl  = true
 # Application Gateway (optional, for advanced routing)
 enable_application_gateway = false  # Set to true if you need advanced routing features
 
-# Storage Configuration
-postgres_disk_size_gb = 100  # Adjust based on your data requirements
+# External PostgreSQL Configuration
+# Configure your existing/external PostgreSQL database for R2R
+postgres_config = {
+  host     = "r2r-documentdb"        # Your PostgreSQL server hostname/IP
+  port     = 5432                   # PostgreSQL port
+  username = "r2r_user"             # Database username for R2R
+  password = "your-secure-password" # Database password (use env var: TF_VAR_postgres_config)
+  database = "r2r"                 # Database name for R2R
+}
+
+# For security, set via environment variable instead:
+# export TF_VAR_postgres_config='{
+#   "host": "your-postgres-host",
+#   "port": 5432,
+#   "username": "r2r_user", 
+#   "password": "your-secure-password",
+#   "database": "r2r"
+# }'
 
 # R2R Application Configuration
 r2r_config = {

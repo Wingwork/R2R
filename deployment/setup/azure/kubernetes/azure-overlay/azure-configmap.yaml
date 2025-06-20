@@ -46,6 +46,12 @@ data:
   R2R_STORAGE_PROVIDER: "azure_blob"
   R2R_METRICS_BACKEND: "azure_monitor"
   
+  # PostgreSQL configuration (overrides base config)
+  R2R_POSTGRES_HOST: "${postgres_host}"
+  R2R_POSTGRES_PORT: "${postgres_port}"
+  R2R_POSTGRES_USER: "${postgres_username}"
+  R2R_POSTGRES_DBNAME: "${postgres_database}"
+  
   # Azure AD authentication (if enabled)
   AZURE_AD_TENANT_ID: ""
   AZURE_AD_CLIENT_ID: ""

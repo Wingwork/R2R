@@ -146,15 +146,24 @@ variable "enable_application_gateway" {
 }
 
 # Storage Configuration
-variable "postgres_disk_size_gb" {
-  description = "Disk size in GB for PostgreSQL storage"
-  type        = number
-  default     = 100
-  
-  validation {
-    condition     = var.postgres_disk_size_gb >= 32 && var.postgres_disk_size_gb <= 32767
-    error_message = "PostgreSQL disk size must be between 32 and 32767 GB."
+# External PostgreSQL Configuration
+variable "postgres_config" {
+  description = "External PostgreSQL database configuration for R2R"
+  type = object({
+    host     = string
+    port     = number
+    username = string
+    password = string
+    database = string
+  })
+  default = {
+    host     = "r2r-documentdb"
+    port     = 5432
+    username = "r2r_user"
+    password = ""  # Must be provided
+    database = "r2r"
   }
+  sensitive = true
 }
 
 # Domain Configuration
