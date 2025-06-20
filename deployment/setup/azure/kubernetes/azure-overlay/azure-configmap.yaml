@@ -1,0 +1,93 @@
+---
+# Azure-specific ConfigMap
+# Extends the base R2R configuration with Azure-specific environment variables
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: azure-config
+  namespace: ai-system
+  labels:
+    app: r2r
+    component: config
+    provider: azure
+data:
+  # Azure region information
+  AZURE_REGION: "eastus"
+  AZURE_RESOURCE_GROUP: "rg-r2r-prod"
+  
+  # Azure Storage configuration
+  AZURE_STORAGE_ACCOUNT: ""  # Will be populated from Terraform output
+  AZURE_STORAGE_CONTAINER: "r2r-data"
+  AZURE_STORAGE_ENDPOINT: "https://your-storage-account.blob.core.windows.net"
+  
+  # Azure Key Vault configuration
+  AZURE_KEY_VAULT_NAME: ""  # Will be populated from Terraform output
+  AZURE_KEY_VAULT_URL: ""   # Will be populated from Terraform output
+  
+  # Azure Monitor and Application Insights
+  AZURE_APPLICATION_INSIGHTS_CONNECTION_STRING: ""
+  AZURE_LOG_ANALYTICS_WORKSPACE_ID: ""
+  
+  # Azure Load Balancer configuration
+  AZURE_LOAD_BALANCER_SKU: "standard"
+  AZURE_DNS_LABEL: "r2r-api"
+  
+  # Azure networking
+  AZURE_VNET_NAME: "vnet-prod-r2r"
+  AZURE_SUBNET_NAME: "subnet-aks"
+  
+  # Azure-specific logging
+  AZURE_LOG_LEVEL: "INFO"
+  AZURE_TELEMETRY_ENABLED: "true"
+  
+  # R2R Azure-specific overrides
+  R2R_CLOUD_PROVIDER: "azure"
+  R2R_STORAGE_PROVIDER: "azure_blob"
+  R2R_METRICS_BACKEND: "azure_monitor"
+  
+  # Azure AD authentication (if enabled)
+  AZURE_AD_TENANT_ID: ""
+  AZURE_AD_CLIENT_ID: ""
+  
+  # Azure Cognitive Services endpoints (if using)
+  AZURE_COGNITIVE_SERVICES_ENDPOINT: ""
+  AZURE_COGNITIVE_SERVICES_REGION: "eastus"
+  
+  # Azure OpenAI (if using Azure OpenAI instead of OpenAI)
+  AZURE_OPENAI_ENDPOINT: ""
+  AZURE_OPENAI_API_VERSION: "2023-12-01-preview"
+  AZURE_OPENAI_DEPLOYMENT_NAME: ""
+  
+  # Azure Container Registry (if using private registry)
+  AZURE_CONTAINER_REGISTRY: ""
+  AZURE_CONTAINER_REGISTRY_URL: ""
+  
+  # Azure Service Bus (if using for messaging)
+  AZURE_SERVICE_BUS_CONNECTION_STRING: ""
+  AZURE_SERVICE_BUS_QUEUE_NAME: "r2r-tasks"
+  
+  # Azure Redis Cache (if using managed Redis)
+  AZURE_REDIS_HOST: ""
+  AZURE_REDIS_PORT: "6380"
+  AZURE_REDIS_SSL: "true"
+  
+  # Azure PostgreSQL (if using managed PostgreSQL)
+  AZURE_POSTGRESQL_SERVER: ""
+  AZURE_POSTGRESQL_SSL_MODE: "require"
+  
+  # Backup and disaster recovery
+  AZURE_BACKUP_ENABLED: "true"
+  AZURE_BACKUP_RETENTION_DAYS: "30"
+  AZURE_BACKUP_FREQUENCY: "daily"
+  
+  # Cost management
+  AZURE_COST_CENTER: "engineering"
+  AZURE_ENVIRONMENT: "production"
+  AZURE_PROJECT: "r2r"
+  
+  # Azure-specific feature flags
+  AZURE_MANAGED_IDENTITY_ENABLED: "true"
+  AZURE_KEY_VAULT_SECRETS_ENABLED: "true"
+  AZURE_MONITOR_INTEGRATION_ENABLED: "true"
+  AZURE_POLICY_COMPLIANCE_ENABLED: "true"

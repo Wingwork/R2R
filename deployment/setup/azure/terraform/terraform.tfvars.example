@@ -1,0 +1,203 @@
+# ===================================
+# R2R Azure Deployment Configuration
+# ===================================
+# Copy this file to terraform.tfvars and update with your specific values
+# Sensitive values should be set via environment variables or Azure Key Vault
+
+# Core Configuration
+environment         = "prod"
+application_name    = "r2r"
+location           = "East US"  # Change to your preferred region
+resource_group_name = "rg-r2r-prod"
+
+# Network Configuration
+vnet_address_space            = "10.0.0.0/16"
+aks_subnet_address_prefix     = "10.0.1.0/24"
+appgw_subnet_address_prefix   = "10.0.2.0/24"
+service_cidr                  = "10.1.0.0/16"
+dns_service_ip               = "10.1.0.10"
+
+# AKS Configuration
+kubernetes_version           = "1.28.3"
+enable_private_cluster      = false  # Set to true for production with proper network setup
+
+# IMPORTANT: Add your Azure AD group Object ID for AKS admin access
+# To find your group ID: az ad group show --group "your-group-name" --query objectId -o tsv
+# Create a group first: az ad group create --display-name "AKS-Admins" --mail-nickname "aks-admins"
+aks_admin_group_object_ids = [
+  # "12345678-1234-1234-1234-123456789012"  # Replace with your actual group Object ID
+]
+
+# Node Pool Configuration
+default_node_pool = {
+  node_count = 3
+  vm_size    = "Standard_D2s_v3"  # 2 vCPU, 8GB RAM - adjust based on needs
+  min_count  = 2
+  max_count  = 10
+}
+
+app_node_pool = {
+  node_count = 2
+  vm_size    = "Standard_D4s_v3"  # 4 vCPU, 16GB RAM - better for R2R workloads
+  min_count  = 1
+  max_count  = 8
+}
+
+# Container Registry Configuration
+acr_sku = "Standard"  # Basic, Standard, or Premium
+
+# Domain Configuration
+domain_name = "r2r.wingwork.com"  # Replace with your actual domain
+enable_ssl  = true
+
+# Application Gateway (optional, for advanced routing)
+enable_application_gateway = false  # Set to true if you need advanced routing features
+
+# Storage Configuration
+postgres_disk_size_gb = 100  # Adjust based on your data requirements
+
+# R2R Application Configuration
+r2r_config = {
+  replicas               = 3      # Number of R2R application replicas
+  cpu_request           = "500m"  # CPU request per pod
+  memory_request        = "1Gi"   # Memory request per pod
+  cpu_limit             = "2000m" # CPU limit per pod
+  memory_limit          = "4Gi"   # Memory limit per pod
+  postgres_storage_size = "50Gi"  # PostgreSQL storage size
+  redis_storage_size    = "10Gi"  # Redis storage size
+}
+
+# Monitoring Configuration
+enable_monitoring    = true
+log_retention_days  = 30
+
+# Security Configuration
+enable_pod_security_policy = true
+enable_network_policies    = true
+
+# Backup Configuration
+backup_configuration = {
+  enabled                = true
+  retention_days        = 30
+  backup_frequency_hours = 24
+}
+
+# Cost Optimization (for development environments)
+enable_spot_instances = false  # Not recommended for production
+
+auto_shutdown_schedule = {
+  enabled  = false  # Set to true for dev environments to save costs
+  time     = "19:00"
+  timezone = "UTC"
+}
+
+# Common Tags (customize for your organization)
+common_tags = {
+  Environment   = "prod"
+  Application   = "r2r"
+  ManagedBy    = "terraform"
+  Owner        = "platform-team"           # Change to your team
+  CostCenter   = "engineering"             # Change to your cost center
+  Project      = "r2r-deployment"
+  Contact      = "platform@yourcompany.com" # Change to your contact email
+  BackupPolicy = "daily"
+  DataClass    = "confidential"
+}
+
+# ===================================
+# SENSITIVE CONFIGURATION
+# ===================================
+# These values should be set via environment variables or stored in Azure Key Vault
+# DO NOT commit these values to version control
+
+# Cloudflare Configuration (if using Cloudflare for DNS)
+cloudflare_config = {
+  zone_id    = ""  # Set via: export TF_VAR_cloudflare_config='{"zone_id":"your-zone-id","api_token":"your-token","enable_cdn":true,"enable_waf":true}'
+  api_token  = ""  # Get from Cloudflare dashboard -> My Profile -> API Tokens
+  enable_cdn = true
+  enable_waf = true
+}
+
+# API Keys for External Services
+# Set these via environment variables:
+# export TF_VAR_api_keys='{"openai_api_key":"sk-...","anthropic_api_key":"sk-ant-...","azure_api_key":"...","google_api_key":"...","github_client_id":"...","github_client_secret":"..."}'
+api_keys = {
+  openai_api_key       = ""  # OpenAI API key for LLM functionality
+  anthropic_api_key    = ""  # Anthropic API key for Claude
+  azure_api_key        = ""  # Azure Cognitive Services API key
+  google_api_key       = ""  # Google Cloud API key
+  github_client_id     = ""  # GitHub OAuth Client ID
+  github_client_secret = ""  # GitHub OAuth Client Secret
+}
+
+# Database Configuration
+postgres_config = {
+  version                 = "16"
+  instance_class         = "Standard_D2s_v3"
+  allocated_storage      = 100
+  max_allocated_storage  = 500
+  backup_retention_period = 7
+  multi_az               = true
+  storage_encrypted      = true
+}
+
+# Alert Configuration
+alert_configuration = {
+  slack_webhook_url     = ""     # Slack webhook URL for alerts
+  email_recipients      = [      # Email addresses for alerts
+    # "admin@yourcompany.com",
+    # "platform-team@yourcompany.com"
+  ]
+  pagerduty_service_key = ""     # PagerDuty service key for critical alerts
+  enable_slack_alerts   = false
+  enable_email_alerts   = true
+  enable_pagerduty      = false
+}
+
+# ===================================
+# ENVIRONMENT-SPECIFIC OVERRIDES
+# ===================================
+
+# For Development Environment:
+# Uncomment and modify these values for a dev environment
+# environment = "dev"
+# resource_group_name = "rg-r2r-dev"
+# default_node_pool = {
+#   node_count = 1
+#   vm_size    = "Standard_B2s"  # Smaller VMs for cost savings
+#   min_count  = 1
+#   max_count  = 3
+# }
+# app_node_pool = {
+#   node_count = 1
+#   vm_size    = "Standard_B2s"
+#   min_count  = 1
+#   max_count  = 2
+# }
+# r2r_config = {
+#   replicas = 1
+#   cpu_request = "250m"
+#   memory_request = "512Mi"
+#   cpu_limit = "500m"
+#   memory_limit = "1Gi"
+#   postgres_storage_size = "20Gi"
+#   redis_storage_size = "5Gi"
+# }
+# auto_shutdown_schedule = {
+#   enabled = true
+#   time = "18:00"
+#   timezone = "UTC"
+# }
+
+# For Staging Environment:
+# environment = "staging"
+# resource_group_name = "rg-r2r-staging"
+# r2r_config = {
+#   replicas = 2
+#   cpu_request = "250m"
+#   memory_request = "512Mi"
+#   cpu_limit = "1000m"
+#   memory_limit = "2Gi"
+#   postgres_storage_size = "30Gi"
+#   redis_storage_size = "8Gi"
+# }

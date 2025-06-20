@@ -1,0 +1,316 @@
+---
+# ClusterIssuer for Let's Encrypt certificates
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: letsencrypt-prod
+spec:
+  acme:
+    # Replace with your email
+    email: admin@wingwork.com
+    server: https://acme-v02.api.letsencrypt.org/directory
+    privateKeySecretRef:
+      name: letsencrypt-prod
+    solvers:
+    - http01:
+        ingress:
+          class: nginx
+          podTemplate:
+            spec:
+              nodeSelector:
+                "kubernetes.io/os": linux
+
+---
+# ClusterIssuer for Let's Encrypt staging (for testing)
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: letsencrypt-staging
+spec:
+  acme:
+    # Replace with your email
+    email: admin@wingwork.com
+    server: https://acme-staging-v02.api.letsencrypt.org/directory
+    privateKeySecretRef:
+      name: letsencrypt-staging
+    solvers:
+    - http01:
+        ingress:
+          class: nginx
+
+---
+# Main ingress for R2R application
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: r2r-ingress
+  namespace: r2r-system
+  annotations:
+    # Ingress class
+    kubernetes.io/ingress.class: nginx
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+    
+    # SSL Certificate configuration
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    # Use staging for testing: cert-manager.io/cluster-issuer: letsencrypt-staging
+    
+    # Rate limiting
+    nginx.ingress.kubernetes.io/rate-limit: "100"
+    nginx.ingress.kubernetes.io/rate-limit-window: "1m"
+    
+    # Connection limits
+    nginx.ingress.kubernetes.io/limit-connections: "20"
+    
+    # Timeouts
+    nginx.ingress.kubernetes.io/proxy-connect-timeout: "300"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "300"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "300"
+    
+    # Body size limits
+    nginx.ingress.kubernetes.io/proxy-body-size: "100m"
+    
+    # CORS configuration
+    nginx.ingress.kubernetes.io/enable-cors: "true"
+    nginx.ingress.kubernetes.io/cors-allow-origin: "https://r2r.wingwork.com"
+    nginx.ingress.kubernetes.io/cors-allow-methods: "GET, POST, PUT, DELETE, OPTIONS"
+    nginx.ingress.kubernetes.io/cors-allow-headers: "DNT,X-CustomHeader,Keep-Alive,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Authorization"
+    
+    # Security headers
+    nginx.ingress.kubernetes.io/configuration-snippet: |
+      add_header X-Frame-Options "SAMEORIGIN" always;
+      add_header X-Content-Type-Options "nosniff" always;
+      add_header X-XSS-Protection "1; mode=block" always;
+      add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+      add_header Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self'; connect-src 'self' https:; frame-ancestors 'self';" always;
+      
+    # Load balancing
+    nginx.ingress.kubernetes.io/upstream-hash-by: "$request_uri"
+    
+    # Compression
+    nginx.ingress.kubernetes.io/enable-compression: "true"
+    
+    # Websocket support
+    nginx.ingress.kubernetes.io/proxy-set-headers: "r2r-system/websocket-headers"
+
+spec:
+  tls:
+  - hosts:
+    - r2r.wingwork.com
+    secretName: r2r-tls-cert
+  rules:
+  - host: r2r.wingwork.com
+    http:
+      paths:
+      # Main R2R API
+      - path: /v3
+        pathType: Prefix
+        backend:
+          service:
+            name: r2r
+            port:
+              number: 7272
+      
+      # Health check endpoint
+      - path: /health
+        pathType: Prefix
+        backend:
+          service:
+            name: r2r
+            port:
+              number: 7272
+      
+      # Dashboard (frontend)
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: r2r-dashboard
+            port:
+              number: 3000
+
+---
+# Separate ingress for monitoring services
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: monitoring-ingress
+  namespace: monitoring
+  annotations:
+    kubernetes.io/ingress.class: nginx
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    
+    # Basic authentication for monitoring endpoints
+    nginx.ingress.kubernetes.io/auth-type: basic
+    nginx.ingress.kubernetes.io/auth-secret: monitoring-basic-auth
+    nginx.ingress.kubernetes.io/auth-realm: 'Authentication Required - Monitoring'
+    
+    # Rate limiting for monitoring
+    nginx.ingress.kubernetes.io/rate-limit: "50"
+    nginx.ingress.kubernetes.io/rate-limit-window: "1m"
+
+spec:
+  tls:
+  - hosts:
+    - r2r.wingwork.com
+    secretName: monitoring-tls-cert
+  rules:
+  - host: r2r.wingwork.com
+    http:
+      paths:
+      # Grafana dashboard
+      - path: /grafana
+        pathType: Prefix
+        backend:
+          service:
+            name: prometheus-grafana
+            port:
+              number: 80
+      
+      # Prometheus UI
+      - path: /prometheus
+        pathType: Prefix
+        backend:
+          service:
+            name: prometheus-kube-prometheus-prometheus
+            port:
+              number: 9090
+      
+      # AlertManager UI
+      - path: /alertmanager
+        pathType: Prefix
+        backend:
+          service:
+            name: prometheus-kube-prometheus-alertmanager
+            port:
+              number: 9093
+
+---
+# ConfigMap for websocket headers
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: websocket-headers
+  namespace: r2r-system
+data:
+  Connection: "upgrade"
+  Upgrade: "$http_upgrade"
+  Host: "$host"
+  X-Real-IP: "$remote_addr"
+  X-Forwarded-For: "$proxy_add_x_forwarded_for"
+  X-Forwarded-Proto: "$scheme"
+
+---
+# Basic auth secret for monitoring endpoints
+apiVersion: v1
+kind: Secret
+metadata:
+  name: monitoring-basic-auth
+  namespace: monitoring
+type: Opaque
+data:
+  # Default: admin/monitoring123
+  # Generate with: htpasswd -c auth admin
+  # Then: cat auth | base64 -w 0
+  auth: YWRtaW46JGFwcjEkSDZ1Y3VuTGEkVlQzdGQ1NFlWMGVPRnBmN1dXa0Z5MAo=
+
+---
+# Ingress for Hatchet workflow dashboard
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: hatchet-ingress
+  namespace: r2r-system
+  annotations:
+    kubernetes.io/ingress.class: nginx
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    
+    # Rewrite rules for Hatchet
+    nginx.ingress.kubernetes.io/rewrite-target: /$2
+    nginx.ingress.kubernetes.io/configuration-snippet: |
+      rewrite ^(/hatchet)$ $1/ redirect;
+
+spec:
+  tls:
+  - hosts:
+    - r2r.wingwork.com
+    secretName: r2r-tls-cert
+  rules:
+  - host: r2r.wingwork.com
+    http:
+      paths:
+      # Hatchet workflow dashboard
+      - path: /hatchet(/|$)(.*)
+        pathType: Prefix
+        backend:
+          service:
+            name: hatchet-dashboard
+            port:
+              number: 80
+
+---
+# Network Policy to restrict access to monitoring namespace
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: monitoring-network-policy
+  namespace: monitoring
+spec:
+  podSelector: {}
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: ingress-nginx
+    - namespaceSelector:
+        matchLabels:
+          name: r2r-system
+    ports:
+    - protocol: TCP
+      port: 3000  # Grafana
+    - protocol: TCP
+      port: 9090  # Prometheus
+    - protocol: TCP
+      port: 9093  # AlertManager
+  egress:
+  - {}  # Allow all outbound traffic
+
+---
+# Network Policy for R2R system
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: r2r-network-policy
+  namespace: r2r-system
+spec:
+  podSelector: {}
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: ingress-nginx
+    - namespaceSelector:
+        matchLabels:
+          name: monitoring
+    - podSelector: {}  # Allow from same namespace
+    ports:
+    - protocol: TCP
+      port: 7272  # R2R API
+    - protocol: TCP
+      port: 3000  # Dashboard
+    - protocol: TCP
+      port: 5432  # PostgreSQL
+    - protocol: TCP
+      port: 7276  # Graph clustering
+    - protocol: TCP
+      port: 7275  # Unstructured
+  egress:
+  - {}  # Allow all outbound traffic

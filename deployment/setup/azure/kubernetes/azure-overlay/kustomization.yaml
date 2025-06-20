@@ -1,0 +1,102 @@
+# Azure Overlay Kustomization
+# Extends the base R2R deployment with Azure-specific configurations
+
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# Use existing base configuration from deployment/k8s/kustomizations
+resources:
+- ../../../k8s/kustomizations
+
+# Use the same namespace as the base configuration
+namespace: ai-system
+
+# Azure-specific ConfigMaps and resources
+resources:
+- azure-configmap.yaml
+- azure-secrets.yaml
+
+# Patches for Azure-specific modifications
+patches:
+# Patch services for Azure Load Balancer integration
+- target:
+    kind: Service
+    name: r2r
+  patch: |-
+    - op: add
+      path: /metadata/annotations
+      value:
+        service.beta.kubernetes.io/azure-load-balancer-sku: "standard"
+        service.beta.kubernetes.io/azure-load-balancer-external: "true"
+        service.beta.kubernetes.io/azure-dns-label-name: "r2r-api"
+        service.beta.kubernetes.io/azure-load-balancer-health-probe-request-path: "/v3/health"
+    - op: replace
+      path: /spec/type
+      value: LoadBalancer
+
+# Patch Hatchet dashboard service for Azure Load Balancer
+- target:
+    kind: Service
+    name: hatchet-dashboard
+  patch: |-
+    - op: add
+      path: /metadata/annotations
+      value:
+        service.beta.kubernetes.io/azure-load-balancer-sku: "standard"
+        service.beta.kubernetes.io/azure-load-balancer-external: "true"
+        service.beta.kubernetes.io/azure-dns-label-name: "r2r-hatchet"
+
+# Patch R2R deployment for Azure-specific environment variables
+- target:
+    kind: Deployment
+    name: r2r
+  patch: |-
+    - op: add
+      path: /spec/template/spec/containers/0/envFrom/-
+      value:
+        configMapRef:
+          name: azure-config
+    - op: add
+      path: /spec/template/spec/containers/0/envFrom/-
+      value:
+        secretRef:
+          name: azure-secrets
+
+# Patch PostgreSQL for Azure Premium storage
+- target:
+    kind: StatefulSet
+    name: postgresql
+  patch: |-
+    - op: replace
+      path: /spec/volumeClaimTemplates/0/spec/storageClassName
+      value: managed-csi-premium
+    - op: add
+      path: /spec/volumeClaimTemplates/0/metadata/annotations
+      value:
+        volume.beta.kubernetes.io/storage-class: "managed-csi-premium"
+
+# Optional: Override images to use Azure Container Registry
+# Uncomment and modify if using ACR
+# images:
+# - name: ragtoriches/prod
+#   newName: youracr.azurecr.io/r2r/app
+#   newTag: latest
+# - name: ragtoriches/unst-prod
+#   newName: youracr.azurecr.io/r2r/unstructured
+#   newTag: latest
+# - name: ragtoriches/cluster-prod
+#   newName: youracr.azurecr.io/r2r/clustering
+#   newTag: latest
+# - name: emrgntcmplxty/r2r-dashboard
+#   newName: youracr.azurecr.io/r2r/dashboard
+#   newTag: latest
+
+# Add Azure-specific labels to all resources
+commonLabels:
+  azure.workload.identity/use: "true"
+  azure.io/managed-by: "aks"
+
+# Add Azure-specific annotations to all resources
+commonAnnotations:
+  azure.io/deployment-method: "kustomize"
+  azure.io/environment: "production"

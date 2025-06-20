@@ -1,0 +1,61 @@
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: r2r-system
+  labels:
+    name: r2r-system
+    environment: production
+    app: r2r
+    tier: application
+  annotations:
+    description: "Main namespace for R2R application and supporting services"
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: monitoring
+  labels:
+    name: monitoring
+    environment: production
+    app: monitoring
+    tier: infrastructure
+  annotations:
+    description: "Namespace for monitoring services (Prometheus, Grafana, AlertManager)"
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: ingress-nginx
+  labels:
+    name: ingress-nginx
+    environment: production
+    app: ingress
+    tier: infrastructure
+  annotations:
+    description: "Namespace for NGINX Ingress Controller"
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: cert-manager
+  labels:
+    name: cert-manager
+    environment: production
+    app: cert-manager
+    tier: infrastructure
+  annotations:
+    description: "Namespace for cert-manager SSL certificate management"
+---
+# Optional: Separate namespace for database if using external database
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: data
+  labels:
+    name: data
+    environment: production
+    app: database
+    tier: data
+  annotations:
+    description: "Namespace for database services (PostgreSQL, Redis)"

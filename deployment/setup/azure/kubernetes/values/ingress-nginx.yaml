@@ -1,0 +1,302 @@
+# NGINX Ingress Controller Helm Values for Azure AKS
+# Optimized for production deployment with R2R
+
+controller:
+  # Image configuration
+  image:
+    registry: registry.k8s.io
+    image: ingress-nginx/controller
+    tag: "v1.9.4"
+    digest: ""
+    pullPolicy: IfNotPresent
+
+  # Replica configuration for high availability
+  replicaCount: 3
+  
+  # Pod Disruption Budget
+  podDisruptionBudget:
+    enabled: true
+    minAvailable: 1
+
+  # Resource requests and limits
+  resources:
+    limits:
+      cpu: 500m
+      memory: 512Mi
+    requests:
+      cpu: 100m
+      memory: 128Mi
+
+  # Auto-scaling configuration
+  autoscaling:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 10
+    targetCPUUtilizationPercentage: 70
+    targetMemoryUtilizationPercentage: 80
+
+  # Pod anti-affinity for better distribution
+  affinity:
+    podAntiAffinity:
+      preferredDuringSchedulingIgnoredDuringExecution:
+      - weight: 100
+        podAffinityTerm:
+          labelSelector:
+            matchExpressions:
+            - key: app.kubernetes.io/name
+              operator: In
+              values:
+              - ingress-nginx
+            - key: app.kubernetes.io/component
+              operator: In
+              values:
+              - controller
+          topologyKey: kubernetes.io/hostname
+
+  # Service configuration for Azure Load Balancer
+  service:
+    enabled: true
+    type: LoadBalancer
+    
+    # Azure-specific annotations
+    annotations:
+      # Use Azure Standard Load Balancer
+      service.beta.kubernetes.io/azure-load-balancer-sku: "standard"
+      
+      # Health probe configuration
+      service.beta.kubernetes.io/azure-load-balancer-health-probe-request-path: "/healthz"
+      
+      # External traffic policy
+      service.beta.kubernetes.io/azure-load-balancer-external: "true"
+      
+      # Session affinity timeout
+      service.beta.kubernetes.io/azure-load-balancer-tcp-idle-timeout: "30"
+      
+      # DNS label for public IP
+      service.beta.kubernetes.io/azure-dns-label-name: "r2r-ingress"
+
+    # External traffic policy
+    externalTrafficPolicy: Local
+    
+    # Session affinity
+    sessionAffinity: None
+
+    # Port configuration
+    ports:
+      http: 80
+      https: 443
+    targetPorts:
+      http: http
+      https: https
+
+  # Configuration for NGINX
+  config:
+    # SSL configuration
+    ssl-protocols: "TLSv1.2 TLSv1.3"
+    ssl-ciphers: "ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384"
+    ssl-prefer-server-ciphers: "true"
+    ssl-session-cache: "shared:SSL:10m"
+    ssl-session-timeout: "10m"
+    
+    # Security headers
+    add-headers: "r2r-system/security-headers"
+    
+    # Performance optimizations
+    keep-alive: "75"
+    keep-alive-requests: "100"
+    upstream-keepalive-connections: "50"
+    upstream-keepalive-requests: "100"
+    upstream-keepalive-timeout: "60"
+    
+    # Body size limits
+    proxy-body-size: "100m"
+    client-max-body-size: "100m"
+    
+    # Timeouts
+    proxy-connect-timeout: "300"
+    proxy-send-timeout: "300"
+    proxy-read-timeout: "300"
+    client-header-timeout: "60"
+    client-body-timeout: "60"
+    
+    # Rate limiting defaults
+    rate-limit: "1000"
+    rate-limit-window: "1m"
+    
+    # Compression
+    enable-brotli: "true"
+    brotli-level: "6"
+    brotli-types: "text/xml image/svg+xml application/x-font-ttf image/vnd.microsoft.icon application/x-font-opentype application/json font/eot application/vnd.ms-fontobject application/javascript font/otf application/xml application/xhtml+xml text/javascript application/x-javascript text/plain application/x-font-truetype application/xml+rss image/x-icon font/opentype text/css image/x-win-bitmap"
+    
+    # Real IP configuration
+    use-forwarded-headers: "true"
+    compute-full-forwarded-for: "true"
+    use-proxy-protocol: "false"
+    
+    # Logging
+    log-format-escape-json: "true"
+    log-format-upstream: '{"time": "$time_iso8601", "remote_addr": "$proxy_protocol_addr", "x_forwarded_for": "$proxy_add_x_forwarded_for", "request_id": "$req_id", "remote_user": "$remote_user", "bytes_sent": $bytes_sent, "request_time": $request_time, "status": $status, "vhost": "$host", "request_proto": "$server_protocol", "path": "$uri", "request_query": "$args", "request_length": $request_length, "duration": $request_time, "method": "$request_method", "http_referrer": "$http_referer", "http_user_agent": "$http_user_agent", "upstream_addr": "$upstream_addr", "upstream_response_time": "$upstream_response_time", "upstream_response_length": "$upstream_response_length", "upstream_status": "$upstream_status"}'
+    
+    # Hide NGINX version
+    server-tokens: "false"
+
+  # Metrics configuration
+  metrics:
+    enabled: true
+    service:
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "10254"
+        prometheus.io/path: "/metrics"
+    serviceMonitor:
+      enabled: true
+      namespace: monitoring
+      additionalLabels:
+        app: ingress-nginx
+
+  # Pod Security Context
+  podSecurityContext:
+    runAsNonRoot: true
+    runAsUser: 101
+    runAsGroup: 82
+    fsGroup: 82
+
+  # Container Security Context
+  containerSecurityContext:
+    runAsNonRoot: true
+    runAsUser: 101
+    runAsGroup: 82
+    allowPrivilegeEscalation: false
+    readOnlyRootFilesystem: true
+    capabilities:
+      drop:
+        - ALL
+      add:
+        - NET_BIND_SERVICE
+
+  # Liveness and readiness probes
+  livenessProbe:
+    httpGet:
+      path: "/healthz"
+      port: 10254
+      scheme: HTTP
+    initialDelaySeconds: 10
+    periodSeconds: 10
+    timeoutSeconds: 1
+    successThreshold: 1
+    failureThreshold: 5
+
+  readinessProbe:
+    httpGet:
+      path: "/healthz"
+      port: 10254
+      scheme: HTTP
+    initialDelaySeconds: 10
+    periodSeconds: 10
+    timeoutSeconds: 1
+    successThreshold: 1
+    failureThreshold: 3
+
+  # Node selection
+  nodeSelector:
+    kubernetes.io/os: linux
+
+  # Tolerations for dedicated ingress nodes (if any)
+  tolerations: []
+
+  # Priority class
+  priorityClassName: ""
+
+# Default backend configuration
+defaultBackend:
+  enabled: true
+  name: default-backend
+  image:
+    registry: registry.k8s.io
+    image: defaultbackend-amd64
+    tag: "1.5"
+  
+  replicaCount: 2
+  
+  resources:
+    limits:
+      cpu: 10m
+      memory: 20Mi
+    requests:
+      cpu: 10m
+      memory: 20Mi
+
+  podSecurityContext:
+    runAsNonRoot: true
+    runAsUser: 65534
+    fsGroup: 65534
+
+  containerSecurityContext:
+    runAsNonRoot: true
+    runAsUser: 65534
+    allowPrivilegeEscalation: false
+    readOnlyRootFilesystem: true
+    capabilities:
+      drop:
+        - ALL
+
+# Pod Security Policy (deprecated in newer K8s versions)
+podSecurityPolicy:
+  enabled: false
+
+# Service Account
+serviceAccount:
+  create: true
+  name: ""
+  automountServiceAccountToken: true
+  annotations: {}
+
+# RBAC configuration
+rbac:
+  create: true
+  scope: false
+
+# Admission webhooks
+admissionWebhooks:
+  enabled: true
+  
+  # Failure policy
+  failurePolicy: Fail
+  
+  # Timeout
+  timeoutSeconds: 30
+  
+  # Certificate management
+  certificate:
+    # Use cert-manager for webhook certificates
+    enabled: true
+  
+  # Patch job configuration
+  patch:
+    enabled: true
+    image:
+      registry: registry.k8s.io
+      image: ingress-nginx/kube-webhook-certgen
+      tag: v20231011-8b53cabe0
+    
+    # Security context for patch job
+    securityContext:
+      runAsNonRoot: true
+      runAsUser: 2000
+      fsGroup: 2000
+
+# TCP/UDP services (if needed)
+tcp: {}
+udp: {}
+
+# Custom error pages (optional)
+# customErrorPages:
+#   404: |
+#     <!DOCTYPE html>
+#     <html>
+#     <head><title>404 Not Found</title></head>
+#     <body>
+#     <h1>404 Not Found</h1>
+#     <p>The page you requested could not be found.</p>
+#     </body>
+#     </html>

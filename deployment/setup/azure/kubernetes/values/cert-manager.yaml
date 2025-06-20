@@ -1,0 +1,387 @@
+# cert-manager Helm Values for Azure AKS
+# Automated SSL certificate management for R2R deployment
+
+# Global configuration
+global:
+  # Pod Security Standards
+  podSecurityPolicy:
+    enabled: false
+    useAppArmor: false
+  
+  # Priority class for cert-manager pods
+  priorityClassName: ""
+
+# Main cert-manager controller
+image:
+  registry: quay.io
+  repository: jetstack/cert-manager-controller
+  tag: v1.13.2
+  pullPolicy: IfNotPresent
+
+# Replica count for high availability
+replicaCount: 2
+
+# Strategy for deployment updates
+strategy:
+  type: RollingUpdate
+  rollingUpdate:
+    maxSurge: 1
+    maxUnavailable: 0
+
+# Pod Disruption Budget
+podDisruptionBudget:
+  enabled: true
+  minAvailable: 1
+
+# Resource configuration
+resources:
+  limits:
+    cpu: 100m
+    memory: 128Mi
+  requests:
+    cpu: 10m
+    memory: 32Mi
+
+# Security Context
+securityContext:
+  runAsNonRoot: true
+  runAsUser: 1000
+  runAsGroup: 1000
+  fsGroup: 1000
+
+containerSecurityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  runAsNonRoot: true
+  runAsUser: 1000
+  runAsGroup: 1000
+  capabilities:
+    drop:
+    - ALL
+
+# Node selection
+nodeSelector:
+  kubernetes.io/os: linux
+
+# Tolerations and affinity
+tolerations: []
+
+affinity:
+  podAntiAffinity:
+    preferredDuringSchedulingIgnoredDuringExecution:
+    - weight: 100
+      podAffinityTerm:
+        labelSelector:
+          matchExpressions:
+          - key: app.kubernetes.io/name
+            operator: In
+            values:
+            - cert-manager
+          - key: app.kubernetes.io/component
+            operator: In
+            values:
+            - controller
+        topologyKey: kubernetes.io/hostname
+
+# Service Account
+serviceAccount:
+  create: true
+  name: ""
+  automountServiceAccountToken: true
+  annotations: {}
+
+# RBAC
+rbac:
+  create: true
+
+# Volumes for temporary files
+volumes:
+- name: tmp
+  emptyDir: {}
+
+volumeMounts:
+- name: tmp
+  mountPath: /tmp
+
+# Liveness and readiness probes
+livenessProbe:
+  enabled: true
+  initialDelaySeconds: 60
+  periodSeconds: 10
+  timeoutSeconds: 15
+  successThreshold: 1
+  failureThreshold: 8
+
+readinessProbe:
+  enabled: true
+  initialDelaySeconds: 5
+  periodSeconds: 5
+  timeoutSeconds: 5
+  successThreshold: 1
+  failureThreshold: 3
+
+# Monitoring
+prometheus:
+  enabled: true
+  servicemonitor:
+    enabled: true
+    prometheusInstance: default
+    targetPort: 9402
+    path: /metrics
+    interval: 60s
+    scrapeTimeout: 30s
+    labels:
+      app: cert-manager
+
+# Feature gates
+featureGates: ""
+
+# Maximum number of challenges that can be scheduled simultaneously
+maxConcurrentChallenges: 60
+
+# DNS configuration for DNS01 challenges
+dns01RecursiveNameservers: "1.1.1.1:53,8.8.8.8:53"
+dns01RecursiveNameserversOnly: false
+
+# Enable certificate owner reference
+enableCertificateOwnerRef: false
+
+# Webhook configuration
+webhook:
+  enabled: true
+  
+  # Replica count
+  replicaCount: 2
+  
+  # Image configuration
+  image:
+    registry: quay.io
+    repository: jetstack/cert-manager-webhook
+    tag: v1.13.2
+    pullPolicy: IfNotPresent
+  
+  # Resources
+  resources:
+    limits:
+      cpu: 100m
+      memory: 128Mi
+    requests:
+      cpu: 10m
+      memory: 32Mi
+  
+  # Security context
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 1000
+    runAsGroup: 1000
+    fsGroup: 1000
+  
+  containerSecurityContext:
+    allowPrivilegeEscalation: false
+    readOnlyRootFilesystem: true
+    runAsNonRoot: true
+    runAsUser: 1000
+    runAsGroup: 1000
+    capabilities:
+      drop:
+      - ALL
+  
+  # Service configuration
+  serviceType: ClusterIP
+  
+  # Webhook timeout
+  timeoutSeconds: 30
+  
+  # Failure policy
+  failurePolicy: Fail
+  
+  # Namespace selector
+  namespaceSelector: {}
+  
+  # Admission review versions
+  admissionReviewVersions: ["v1", "v1beta1"]
+  
+  # Pod Disruption Budget
+  podDisruptionBudget:
+    enabled: true
+    minAvailable: 1
+  
+  # Liveness and readiness probes
+  livenessProbe:
+    enabled: true
+    initialDelaySeconds: 60
+    periodSeconds: 10
+    timeoutSeconds: 15
+    successThreshold: 1
+    failureThreshold: 8
+  
+  readinessProbe:
+    enabled: true
+    initialDelaySeconds: 5
+    periodSeconds: 5
+    timeoutSeconds: 5
+    successThreshold: 1
+    failureThreshold: 3
+
+# CA Injector configuration
+cainjector:
+  enabled: true
+  
+  # Replica count
+  replicaCount: 2
+  
+  # Image configuration
+  image:
+    registry: quay.io
+    repository: jetstack/cert-manager-cainjector
+    tag: v1.13.2
+    pullPolicy: IfNotPresent
+  
+  # Resources
+  resources:
+    limits:
+      cpu: 100m
+      memory: 128Mi
+    requests:
+      cpu: 10m
+      memory: 32Mi
+  
+  # Security context
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 1000
+    runAsGroup: 1000
+    fsGroup: 1000
+  
+  containerSecurityContext:
+    allowPrivilegeEscalation: false
+    readOnlyRootFilesystem: true
+    runAsNonRoot: true
+    runAsUser: 1000
+    runAsGroup: 1000
+    capabilities:
+      drop:
+      - ALL
+  
+  # Pod Disruption Budget
+  podDisruptionBudget:
+    enabled: true
+    minAvailable: 1
+
+# ACME HTTP01 solver configuration
+acmesolver:
+  image:
+    registry: quay.io
+    repository: jetstack/cert-manager-acmesolver
+    tag: v1.13.2
+    pullPolicy: IfNotPresent
+  
+  # Resources for ACME solver pods
+  resources:
+    limits:
+      cpu: 100m
+      memory: 64Mi
+    requests:
+      cpu: 10m
+      memory: 16Mi
+  
+  # Security context for ACME solver
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 2000
+    runAsGroup: 2000
+  
+  containerSecurityContext:
+    allowPrivilegeEscalation: false
+    readOnlyRootFilesystem: true
+    runAsNonRoot: true
+    runAsUser: 2000
+    runAsGroup: 2000
+    capabilities:
+      drop:
+      - ALL
+
+# Startup API check configuration
+startupapicheck:
+  enabled: true
+  
+  # Security context
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 1000
+    runAsGroup: 1000
+  
+  containerSecurityContext:
+    allowPrivilegeEscalation: false
+    readOnlyRootFilesystem: true
+    runAsNonRoot: true
+    runAsUser: 1000
+    runAsGroup: 1000
+    capabilities:
+      drop:
+      - ALL
+  
+  # Timeout for API check
+  timeout: 1m
+  
+  # Backoff limit
+  backoffLimit: 4
+  
+  # Job annotations
+  jobAnnotations:
+    helm.sh/hook: post-install
+    helm.sh/hook-weight: "1"
+    helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded
+
+# Installation of Custom Resource Definitions
+installCRDs: true
+
+# Network policies (if using Calico or similar CNI)
+networkPolicy:
+  enabled: false
+  
+  # Ingress rules
+  ingress:
+  - from: []
+  
+  # Egress rules  
+  egress:
+  - {}
+
+# Extra arguments for cert-manager
+extraArgs:
+  - --v=2
+  - --cluster-resource-namespace=$(POD_NAMESPACE)
+  - --leader-election-namespace=$(POD_NAMESPACE)
+  # Enable the HTTP-01 challenge provider
+  - --acme-http01-solver-image=quay.io/jetstack/cert-manager-acmesolver:v1.13.2
+
+# Extra environment variables
+extraEnv:
+- name: POD_NAMESPACE
+  valueFrom:
+    fieldRef:
+      fieldPath: metadata.namespace
+
+# DNS policy
+dnsPolicy: ClusterFirst
+
+# DNS config
+dnsConfig: {}
+
+# Log level
+logLevel: 2
+
+# Leader election
+leaderElection:
+  namespace: ""
+
+# Azure-specific configuration (if using Azure DNS for DNS01 challenges)
+# Uncomment and configure if you want to use DNS01 challenges with Azure DNS
+# azureDNS:
+#   clientID: ""
+#   clientSecret: ""
+#   subscriptionID: ""
+#   tenantID: ""
+#   resourceGroupName: ""
+#   hostedZoneName: ""

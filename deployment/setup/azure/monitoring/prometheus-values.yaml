@@ -1,0 +1,564 @@
+# Prometheus Stack (kube-prometheus-stack) Helm Values for R2R Monitoring
+# Comprehensive monitoring setup for production Azure AKS deployment
+
+# Global settings
+nameOverride: ""
+fullnameOverride: ""
+
+# Default registry for all images
+defaultRules:
+  create: true
+  rules:
+    alertmanager: true
+    etcd: true
+    configReloaders: true
+    general: true
+    k8s: true
+    kubeApiserver: true
+    kubeApiserverAvailability: true
+    kubeApiserverSlos: true
+    kubelet: true
+    kubeProxy: true
+    kubePrometheusGeneral: true
+    kubePrometheusNodeRecording: true
+    kubernetesApps: true
+    kubernetesResources: true
+    kubernetesStorage: true
+    kubernetesSystem: true
+    kubeScheduler: true
+    kubeStateMetrics: true
+    network: true
+    node: true
+    nodeExporterAlerting: true
+    nodeExporterRecording: true
+    prometheus: true
+    prometheusOperator: true
+
+  # Custom labels for all default rules
+  additionalLabels:
+    cluster: r2r-prod
+    environment: production
+
+  # Default rule annotations
+  annotations:
+    runbook_url: "https://runbooks.prometheus-operator.dev/runbooks"
+
+# AlertManager configuration
+alertmanager:
+  enabled: true
+  
+  # Service configuration
+  service:
+    type: ClusterIP
+    port: 9093
+    targetPort: 9093
+    
+  # ServiceMonitor for Prometheus to scrape AlertManager
+  serviceMonitor:
+    selfMonitor: true
+    
+  # Ingress configuration (handled by main ingress)
+  ingress:
+    enabled: false
+    
+  # AlertManager-specific configuration
+  alertmanagerSpec:
+    # Image
+    image:
+      registry: quay.io
+      repository: prometheus/alertmanager
+      tag: v0.26.0
+      
+    # Replica count for high availability
+    replicas: 2
+    
+    # Pod anti-affinity
+    affinity:
+      podAntiAffinity:
+        preferredDuringSchedulingIgnoredDuringExecution:
+        - weight: 100
+          podAffinityTerm:
+            labelSelector:
+              matchExpressions:
+              - key: app.kubernetes.io/name
+                operator: In
+                values:
+                - alertmanager
+            topologyKey: kubernetes.io/hostname
+    
+    # Resource requests and limits
+    resources:
+      limits:
+        cpu: 100m
+        memory: 128Mi
+      requests:
+        cpu: 50m
+        memory: 64Mi
+    
+    # Storage configuration
+    storage:
+      volumeClaimTemplate:
+        spec:
+          storageClassName: managed-csi
+          accessModes: ["ReadWriteOnce"]
+          resources:
+            requests:
+              storage: 10Gi
+    
+    # Retention period
+    retention: 120h
+    
+    # Log level
+    logLevel: info
+    
+    # Security context
+    securityContext:
+      runAsNonRoot: true
+      runAsUser: 1000
+      fsGroup: 2000
+    
+    # Node selector
+    nodeSelector:
+      kubernetes.io/os: linux
+    
+    # Tolerations
+    tolerations: []
+    
+    # Pod disruption budget
+    podDisruptionBudget:
+      enabled: true
+      minAvailable: 1
+
+# Grafana configuration
+grafana:
+  enabled: true
+  
+  # Grafana image
+  image:
+    registry: docker.io
+    repository: grafana/grafana
+    tag: 10.2.0
+    
+  # Admin credentials
+  adminPassword: ""  # Will be auto-generated if empty
+  
+  # Persistence
+  persistence:
+    enabled: true
+    type: pvc
+    storageClassName: managed-csi
+    accessModes:
+      - ReadWriteOnce
+    size: 10Gi
+    
+  # Resource configuration
+  resources:
+    limits:
+      cpu: 200m
+      memory: 256Mi
+    requests:
+      cpu: 100m
+      memory: 128Mi
+  
+  # Security context
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 472
+    fsGroup: 472
+  
+  # Service configuration
+  service:
+    type: ClusterIP
+    port: 80
+    targetPort: 3000
+    
+  # ServiceMonitor
+  serviceMonitor:
+    enabled: true
+    path: /metrics
+    
+  # Ingress (handled by main ingress)
+  ingress:
+    enabled: false
+    
+  # Grafana configuration
+  grafana.ini:
+    server:
+      root_url: https://r2r.wingwork.com/grafana/
+      serve_from_sub_path: true
+    security:
+      cookie_secure: true
+      cookie_samesite: strict
+    auth:
+      disable_login_form: false
+    auth.anonymous:
+      enabled: false
+    analytics:
+      reporting_enabled: false
+      check_for_updates: false
+    log:
+      mode: console
+      level: info
+      
+  # Default data sources
+  datasources:
+    datasources.yaml:
+      apiVersion: 1
+      datasources:
+      - name: Prometheus
+        type: prometheus
+        url: http://prometheus-kube-prometheus-prometheus:9090
+        access: proxy
+        isDefault: true
+        
+  # Dashboard providers
+  dashboardProviders:
+    dashboardproviders.yaml:
+      apiVersion: 1
+      providers:
+      - name: 'default'
+        orgId: 1
+        folder: ''
+        type: file
+        disableDeletion: false
+        editable: true
+        options:
+          path: /var/lib/grafana/dashboards/default
+      - name: 'r2r'
+        orgId: 1
+        folder: 'R2R'
+        type: file
+        disableDeletion: false
+        editable: true
+        options:
+          path: /var/lib/grafana/dashboards/r2r
+          
+  # Custom dashboards
+  dashboards:
+    default:
+      kubernetes-cluster:
+        gnetId: 7249
+        revision: 1
+        datasource: Prometheus
+      node-exporter:
+        gnetId: 1860
+        revision: 27
+        datasource: Prometheus
+      nginx-ingress:
+        gnetId: 9614
+        revision: 1
+        datasource: Prometheus
+    r2r:
+      # Custom R2R dashboards will be mounted here
+      # These should be created as ConfigMaps
+      
+  # Plugins to install
+  plugins:
+    - grafana-piechart-panel
+    - grafana-worldmap-panel
+    - grafana-clock-panel
+    - grafana-simple-json-datasource
+    
+  # Environment variables
+  env:
+    GF_FEATURE_TOGGLES_ENABLE: "publicDashboards"
+    GF_INSTALL_PLUGINS: "grafana-piechart-panel,grafana-worldmap-panel"
+
+# Prometheus configuration
+prometheus:
+  enabled: true
+  
+  # Service configuration
+  service:
+    type: ClusterIP
+    port: 9090
+    targetPort: 9090
+    
+  # ServiceMonitor
+  serviceMonitor:
+    selfMonitor: true
+    
+  # Ingress (handled by main ingress)
+  ingress:
+    enabled: false
+    
+  # Prometheus server configuration
+  prometheusSpec:
+    # Image
+    image:
+      registry: quay.io
+      repository: prometheus/prometheus
+      tag: v2.47.0
+      
+    # Replica count
+    replicas: 2
+    
+    # Pod anti-affinity
+    affinity:
+      podAntiAffinity:
+        preferredDuringSchedulingIgnoredDuringExecution:
+        - weight: 100
+          podAffinityTerm:
+            labelSelector:
+              matchExpressions:
+              - key: app.kubernetes.io/name
+                operator: In
+                values:
+                - prometheus
+            topologyKey: kubernetes.io/hostname
+    
+    # Resource configuration
+    resources:
+      limits:
+        cpu: 2000m
+        memory: 4Gi
+      requests:
+        cpu: 500m
+        memory: 2Gi
+        
+    # Storage configuration
+    storageSpec:
+      volumeClaimTemplate:
+        spec:
+          storageClassName: managed-csi
+          accessModes: ["ReadWriteOnce"]
+          resources:
+            requests:
+              storage: 50Gi
+              
+    # Retention settings
+    retention: 30d
+    retentionSize: 45GB
+    
+    # WAL compression
+    walCompression: true
+    
+    # Security context
+    securityContext:
+      runAsNonRoot: true
+      runAsUser: 1000
+      fsGroup: 2000
+      
+    # Service discovery
+    serviceMonitorSelectorNilUsesHelmValues: false
+    serviceMonitorSelector: {}
+    serviceMonitorNamespaceSelector: {}
+    
+    ruleSelectorNilUsesHelmValues: false
+    ruleSelector: {}
+    ruleNamespaceSelector: {}
+    
+    podMonitorSelectorNilUsesHelmValues: false
+    podMonitorSelector: {}
+    podMonitorNamespaceSelector: {}
+    
+    probeSelectorNilUsesHelmValues: false
+    probeSelector: {}
+    probeNamespaceSelector: {}
+    
+    # Scrape configuration
+    scrapeInterval: 30s
+    scrapeTimeout: 10s
+    evaluationInterval: 30s
+    
+    # External labels
+    externalLabels:
+      cluster: r2r-prod
+      environment: production
+      region: eastus
+      
+    # Remote write (optional - for long-term storage)
+    remoteWrite: []
+    # - url: "https://prometheus-remote-write-endpoint"
+    #   queueConfig:
+    #     capacity: 10000
+    #     maxShards: 200
+    #     minShards: 1
+    #     maxSamplesPerSend: 5000
+    #     batchSendDeadline: 5s
+    
+    # Additional scrape configs
+    additionalScrapeConfigs: []
+    # - job_name: 'r2r-custom'
+    #   static_configs:
+    #   - targets: ['r2r:7272']
+    #   metrics_path: '/metrics'
+    #   scrape_interval: 15s
+    
+    # Pod disruption budget
+    podDisruptionBudget:
+      enabled: true
+      minAvailable: 1
+      
+    # Node selector
+    nodeSelector:
+      kubernetes.io/os: linux
+
+# Prometheus Operator configuration
+prometheusOperator:
+  enabled: true
+  
+  # Image
+  image:
+    registry: quay.io
+    repository: prometheus-operator/prometheus-operator
+    tag: v0.68.0
+    
+  # Prometheus config reloader
+  prometheusConfigReloader:
+    image:
+      registry: quay.io
+      repository: prometheus-operator/prometheus-config-reloader
+      tag: v0.68.0
+    resources:
+      limits:
+        cpu: 200m
+        memory: 50Mi
+      requests:
+        cpu: 100m
+        memory: 25Mi
+        
+  # Resources
+  resources:
+    limits:
+      cpu: 200m
+      memory: 200Mi
+    requests:
+      cpu: 100m
+      memory: 100Mi
+      
+  # Security context
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 65534
+    
+  # Service account
+  serviceAccount:
+    create: true
+    name: ""
+
+# Node Exporter configuration
+nodeExporter:
+  enabled: true
+  
+  # Service monitor
+  serviceMonitor:
+    enabled: true
+    scrapeTimeout: 10s
+    interval: 30s
+    
+  # Resources
+  resources:
+    limits:
+      cpu: 200m
+      memory: 50Mi
+    requests:
+      cpu: 100m
+      memory: 30Mi
+
+# Kube State Metrics configuration  
+kubeStateMetrics:
+  enabled: true
+  
+  # Resources
+  resources:
+    limits:
+      cpu: 100m
+      memory: 64Mi
+    requests:
+      cpu: 10m
+      memory: 32Mi
+
+# Kube API Server monitoring
+kubeApiServer:
+  enabled: true
+  serviceMonitor:
+    interval: 30s
+    scrapeTimeout: 10s
+
+# Kubelet monitoring
+kubelet:
+  enabled: true
+  serviceMonitor:
+    interval: 30s
+    scrapeTimeout: 10s
+    
+    # Disable cAdvisor metrics if not needed (reduces cardinality)
+    cAdvisor: true
+    probes: true
+    resource: true
+    resourcePath: "/metrics/resource"
+
+# Kube Controller Manager monitoring
+kubeControllerManager:
+  enabled: true
+  service:
+    enabled: true
+    port: 10257
+    targetPort: 10257
+  serviceMonitor:
+    enabled: true
+    interval: 30s
+    scrapeTimeout: 10s
+
+# CoreDNS monitoring
+coreDns:
+  enabled: true
+  service:
+    enabled: true
+    port: 9153
+    targetPort: 9153
+  serviceMonitor:
+    enabled: true
+    interval: 30s
+    scrapeTimeout: 10s
+
+# Kube DNS monitoring (if using kube-dns instead of CoreDNS)
+kubeDns:
+  enabled: false
+
+# Kube ETCD monitoring
+kubeEtcd:
+  enabled: true
+  service:
+    enabled: true
+    port: 2381
+    targetPort: 2381
+  serviceMonitor:
+    enabled: true
+    interval: 30s
+    scrapeTimeout: 10s
+
+# Kube Scheduler monitoring
+kubeScheduler:
+  enabled: true
+  service:
+    enabled: true
+    port: 10259
+    targetPort: 10259
+  serviceMonitor:
+    enabled: true
+    interval: 30s
+    scrapeTimeout: 10s
+
+# Kube Proxy monitoring
+kubeProxy:
+  enabled: true
+  service:
+    enabled: true
+    port: 10249
+    targetPort: 10249
+  serviceMonitor:
+    enabled: true
+    interval: 30s
+    scrapeTimeout: 10s
+
+# Windows node monitoring (if using Windows nodes)
+windowsMonitoring:
+  enabled: false
+
+# Common labels for all resources
+commonLabels:
+  cluster: r2r-prod
+  environment: production
+  managed-by: helm
